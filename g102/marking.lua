@@ -1,230 +1,260 @@
+local config = {}
 -- scope config block
-local scope_bind = "mb2" -- mbX for mouse / X for kb
-local scope_mode = "hold" -- hold / toggle
-local short_scope_marking = true
+config.scope_bind = "mb2" -- mbX for mouse / X for kb
+config.scope_mode = "hold" -- hold / toggle
+config.short_scope_marking = true
 -- marker config block
-local marker_bind = "mb5" -- mbX for mouse / X for kb
-local marker_timeout = 1500
-local marker_enemy_timeout = 1500
+config.marker_bind = "mb4" -- mbX for mouse / X for kb
+config.marker_timeout = 1500
+config.marker_enemy_timeout = 1500
 -- debug log
-local debug_log = true
+config.debug_log = true
 
 -- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 -- !!!!! DONT TOUCH NOTHING BELOW THIS COMMENT !!!!!
 -- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+if config.debug_log then
     ClearLog()
-
-local function script_loading_message(message)
-    OutputLogMessage("Loading "..message.."...\n")
 end
 
-local function script_loaded_message()
-    OutputLogMessage("Script loaded! GLHF\n")
-end
+local function debug_message(message, endline)
+    if message == nil then
+        message = ""
+    end
 
-local function debug_message(message)
-    if debug_log then
+    if endline == nil then
+        endline = true
+    end
+
+    if config.debug_log then
         OutputLogMessage(message)
     end
+
+    if endline then
+        OutputLogMessage("\n")
+    end
 end
 
--- *********************
--- *** Button class ***
--- *********************
-script_loading_message("Buttons")
+-- ********************
+-- *** button class ***
+-- ********************
+debug_message("Creating buttons... ")
 
-local Button = {}
+local button_class = {}
 
-function Button:new(bind)
-    local t = setmetatable({}, { __index = Button })
-
+function button_class:new(button_bind)
     -- constract
-    local device
-    local keycode
+    local _ = {}
 
-    -- constract
-    if string.match(bind, "mb%d") then
-        DebugMessage("1")
-        device = "mouse"
-        keycode = bind[3]
+    if string.match(button_bind, "mb%d") then
+        _.device = "mouse"
+        _.keycode = tonumber(string.match(button_bind, "%d", 3))
     else
-        DebugMessage("2")
-        device = "kb"
-        keycode = bind
+        _.device = "kb"
+        _.keycode = button_bind
     end
 
-    -- return local keycode value
-    function t:get_keycode()
-        return keycode
-    end
-    -- return local device value
-    function t:get_device()
-        return device
+    local obj = {}
+
+    obj.get_keycode = function()
+        return _.keycode
     end
 
-    -- private
-    local function emulate()
-        Sleep(math.random(75, 125))
+    obj.get_device = function()
+        return _.device
+    end
 
-        if device == "mouse" then
-            PressAndReleaseMouseButton(keycode)
+    obj.press_and_release = function()
+        local function pause()
+            Sleep(math.random(50, 100))
+        end
+
+        if _.device == "mouse" then
+            PressMouseButton(_.keycode)
+            pause()
+            ReleaseMouseButton(_.keycode)
+            pause()
         else
-            PressAndReleaseKey(keycode)
+            PressKey(_.keycode)
+            pause()
+            ReleaseKey(_.keycode)
+            pause()
         end
     end
 
-    -- emulate mouse click or kb press and realease n-time
-    function t:PressAndRelease(count)
-        if count == nil then
-            count = 1
-        end
-
-        while count > 0 do
-            count = count - 1
-            emulate()
-        end
-    end
-
-    return t
+    setmetatable(obj, self)
+    self.__index = self
+    return obj
 end
 
 -- ********************
--- *** scope_button ***
+-- *** scope button ***
 -- ********************
-local scope_button = Button:new(scope_bind)
+local scope_button = button_class:new(config.scope_bind)
+debug_message("scope_button.get_keycode() = "..scope_button.get_keycode())
+debug_message("scope_button.get_device() = "..scope_button.get_device())
 
--- *******************
--- *** marker_button ***
--- *******************
-local marker_button = Button:new(marker_bind)
--- ******************
--- *** Marker class ***
--- ******************
-script_loading_message("Markers")
+-- *********************
+-- *** marker button ***
+-- *********************
+local marker_button = button_class:new(config.marker_bind)
+debug_message("marker_button.get_keycode() = "..marker_button.get_keycode())
+debug_message("marker_button.get_device() = "..marker_button.get_device())
 
-local Marker = {}
+-- ********************
+-- *** marker class ***
+-- ********************
+debug_message("Creating markers... ", false)
 
-function Marker:new(timeout, click_needed)
-    local t = setmetatable({}, { __index = Marker })
+local marker_class = {}
 
-    -- private
-    local time = 0
-    local timeout = (timeout or 1500)
-    local button = (marker_button or Button:new("lalt"))
-    local click_needed = (click_needed or 1)
+function marker_class:new(timeout)
+    -- _
+    local _ = {}
+    _.time = 0
+    _.timeout = timeout
+    _.button = marker_button
+
+    local obj = {}
 
     -- place marker
-    function t:place()
+    obj.place = function()
         local current_time = GetRunningTime()
-        local elapsed = current_time - time
-        if elapsed < timeout then
-            debug_message(">>> elapsed: "..elapsed.." timeout: "..timeout.." current time: "..current_time)
-            return false
+        local elapsed_time = current_time - _.time
+
+        if elapsed_time < _.timeout then
+            debug_message("[INFO] TIMEOUT!!! left "..(_.timeout - elapsed_time).."ms")
+
+            return
         end
 
-        button.PressAndRelease(click_needed)
-        time = GetRunningTime()
+        _.button.press_and_release()
+        _.time = GetRunningTime()
+
+        debug_message("[INFO] marker placed in "..current_time.."ms")
     end
 
-    return t
+    setmetatable(obj, self)
+    self.__index = self
+    return obj
 end
 
--- *******************
+-- *********************
 -- *** simple marker ***
--- *******************
-local simple_mark = Marker:new(marker_timeout, 1)
+-- *********************
+local simple_marker = marker_class:new(config.marker_timeout)
 
--- ******************
+-- ********************
 -- *** enemy marker ***
--- ******************
-local enemy_mark = Marker:new(marker_enemy_timeout, 2)
+-- ********************
+local enemy_marker = marker_class:new(config.marker_enemy_timeout)
 
--- ******************
--- *** Scope class ***
--- ******************
-script_loading_message("Scope")
+debug_message("done!")
 
-local Scope = {}
+-- *******************
+-- *** scope class ***
+-- *******************
+debug_message("Creating scope... ")
 
-function Scope:new(marker)
-    local t = setmetatable({}, { __index = Scope })
+local scope_class = {}
 
-    -- private
-    local marker = (marker or Marker:new(1500, 1))
-    local mode = (scope_mode or "hold")
-    local time = 0
-    local short_scope_marking = (short_scope_marking or false)
-    local short_scope_timeout = 125
+function scope_class:new(marker)
 
-    if mode ~= "hold" and mode ~= "toggle" then
-        debug_message("ERROR! unexpected parametr scope_mode=\"hold\" forced")
+    local _ = {}
+    _.marker = marker
+    _.mode = config.scope_mode
+    _.time = 0
+    _.short_scope_marking = config.short_scope_marking
+    _.short_scope_timeout = 125
+
+    if _.mode ~= "hold" and _.mode ~= "toggle" then
+        debug_message("ERROR! unexpected parametr, scope_mode=\"hold\" forced")
     end
 
+    local obj = {}
+
     -- getters
-    function t:get_mode()
-        return mode
+    obj.get_mode = function()
+        return _.mode
     end
 
     -- in scope now
-    local function is_on()
-        return (time > 0)
+    obj.is_on = function()
+        return (_.time > 0)
     end
 
     -- not in scope
-    local function is_off()
-        return (time == 0)
+    obj.is_off = function()
+        return (_.time == 0)
     end
 
     -- enter in scope
-    function t:enter()
-        if self:is_on() then debug_message("already in scope!!!") return end
+    obj.enter = function()
+        if obj.is_on() then
+            debug_message("[INFO] already in scope!!!")
+            return
+        end
 
-        time = GetRunningTime()
+        _.time = GetRunningTime()
         EnablePrimaryMouseButtonEvents(true)
 
-        debug_message("***** scope entered")
-        debug_message("enter_time: "..time)
+        debug_message("[INFO] scope ON")
     end
 
     -- exit from scope
-    function t:exit()
-        if self:is_off() then debug_message("already in scope!!!") return end
-
-        local current_time = GetRunningTime()
-
-        debug_message("***** scope exited")
-        debug_message("exit_time: "..GetRunningTime())
-
-        if short_scope_marking and current_time - time > short_scope_timeout then
-            marker.place()
-            debug_message("short click detected! placing marker...")
+    obj.exit = function()
+        if obj.is_off() then
+            debug_message("[INFO] NOT in scope!!!")
+            return
         end
 
-        time = 0
+        local current_time = GetRunningTime()
+        local elapsed_time = current_time - _.time
+
+        debug_message("[INFO] scope OFF after "..elapsed_time.."ms")
+
+        if _.short_scope_marking and elapsed_time < _.short_scope_timeout then
+            debug_message("[INFO] short scope detected!")
+            _.marker.place()
+        end
+
+        _.time = 0
         EnablePrimaryMouseButtonEvents(false)
     end
 
     -- toggle scope for same name mode
-    function t:toggle()
-        if self:is_on() then self:exit() end
-        if self:is_off() then self:enter() end
+    obj.toggle = function()
+        if obj.is_on() then
+            obj.exit()
+            return
+        end
+
+        if obj.is_off() then
+            obj.enter()
+            return
+        end
+
+        debug_message("[ERROR] scope state is undefined")
     end
 
-    return t
+    setmetatable(obj, self)
+    self.__index = self
+    return obj
 end
 
 -- *******************
 -- *** scope state ***
 -- *******************
-local scope = Scope:new(simple_mark, scope_mode, short_scope_marking)
-
-script_loaded_message()
+local scope = scope_class:new(simple_marker)
+debug_message("scope.get_mode() = "..scope.get_mode())
 
 -- **************************
 -- *** waiting for events ***
 -- **************************
+debug_message("Script loaded! GLHF\n")
+
 function OnEvent(event, button, family)
-    if family == scope_button.get_device() and button == scope_button.get_keycode() then
+    if button == scope_button.get_keycode() then
         if scope.get_mode() == "hold" then
             if event == "MOUSE_BUTTON_PRESSED" then
                 scope.enter()
@@ -233,7 +263,9 @@ function OnEvent(event, button, family)
             if event == "MOUSE_BUTTON_RELEASED" then
                 scope.exit()
             end
-        elseif scope.get_mode() == "toggle" then
+        end
+
+        if scope.get_mode() == "toggle" then
             if event == "MOUSE_BUTTON_RELEASED" then
                 scope.toggle()
             end
@@ -241,8 +273,8 @@ function OnEvent(event, button, family)
     end
 
     if (event == "MOUSE_BUTTON_PRESSED" and button == 1) then
-        if scope.state == true then
-            enemy_mark.place()
+        if scope.is_on() then
+            enemy_marker.place()
         end
     end
 end
