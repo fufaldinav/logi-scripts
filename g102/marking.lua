@@ -254,6 +254,14 @@ debug_message("scope.get_mode() = "..scope.get_mode())
 debug_message("Script loaded! GLHF\n")
 
 function OnEvent(event, button, family)
+    -- auto double click
+    if event == "MOUSE_BUTTON_RELEASED" and button == 5 then
+        Sleep(math.random(5,15))
+        PressMouseButton(5)
+        Sleep(math.random(25,60))
+        ReleaseMouseButton(5)
+    end
+
     if button == scope_button.get_keycode() then
         if scope.get_mode() == "hold" then
             if event == "MOUSE_BUTTON_PRESSED" then
